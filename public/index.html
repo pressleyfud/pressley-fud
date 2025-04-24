@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pressley FUD Meme Generator</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; }
+    button { margin-top: .5rem; }
+    #headlines-list { list-style: none; padding: 0; }
+    #headlines-list li { margin: .25rem 0; cursor: pointer; }
+    #headlines-list li:hover { text-decoration: underline; }
+    #meme-output { white-space: pre-wrap; background: #f4f4f4; padding: 1rem; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Pressley FUD Meme Generator</h1>
+
+  <!-- 1) Load & Pick a Real Headline -->
+  <section>
+    <button id="load-headlines">Load Real Headlines</button>
+    <ul id="headlines-list"></ul>
+  </section>
+
+  <hr/>
+
+  <!-- 2) Meme Form -->
+  <section>
+    <h2>Create a Meme</h2>
+    <label>
+      <input type="radio" name="type" value="real" checked /> Real Headline
+    </label>
+    <label>
+      <input type="radio" name="type" value="custom" /> Custom
+    </label>
+
+    <div id="real-input">
+      <select id="real-headline-select" style="width:100%; margin-top:.5rem;">
+        <option value="">— choose one —</option>
+      </select>
+    </div>
+
+    <div id="custom-input" style="display:none; margin-top:.5rem;">
+      <input type="text" id="custom-headline" placeholder="Enter your headline" style="width:100%;" />
+    </div>
+
+    <button id="generate-meme">Generate Meme Text</button>
+
+    <pre id="meme-output"></pre>
+  </section>
+
+  <script>
+    const loadBtn = document.getElementById("load-headlines");
+    const listEl  = document.getElementById("headlines-list");
+    const realSelect = document.getElementById("real-headline-select");
+    const customInput = document.getElementById("custom-headline");
+    const realDiv = document.getElementById("real-input");
+    const customDiv = document.getElementById("custom-input");
+    const radios = document.getElementsByName("type");
+    const generateBtn = document.getElementById("generate-meme");
+    const outputEl = document.getElementById("meme-output");
+
+    // 1) load real headlines
+    loadBtn.onclick = async () => {
+      loadBtn.disabled = true;
+      loadBtn.textContent = "Loading…";
+      try {
+        const resp = await fetch("/api/headlines");
+        const data = await resp.json();
+        listEl.innerHTML = "";
+        data.real.forEach(h => {
+          const li = document.createElement("li");
+          li.textContent = h;
+          li.onclick = () => {
+            // populate dropdown & select it
+            if (![...realSelect.options].some(o => o.value === h)) {
+              const opt = document.createElement("option");
+              opt.value = h; opt.textContent = h;
+              realSelect.appendChild(opt);
+            }
+            realSelect.value = h;
+          };
+          listEl.appendChild(li);
+        });
+      } catch (e) {
+        alert("Failed to load headlines");
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = "Load Real Headlines";
+      }
+    };
+
+    // 2) toggle real vs custom
+    radios.forEach(r => r.onchange = () => {
+      if (r.checked && r.value === "custom") {
+        realDiv.style.display = "none";
+        customDiv.style.display = "block";
+      } else if (r.checked) {
+        realDiv.style.display = "block";
+        customDiv.style.display = "none";
+      }
+    });
+
+    // 3) submit form
+    generateBtn.onclick = async () => {
+      outputEl.textContent = "";
+      let headline, isReal;
+      if ([...radios].find(r => r.checked).value === "real") {
+        headline = realSelect.value;
+        isReal = true;
+        if (!headline) { alert("Please select a real headline"); return; }
+      } else {
+        headline = customInput.value.trim();
+        isReal = false;
+        if (!headline) { alert("Please enter a custom headline"); return; }
+      }
+
+      generateBtn.disabled = true;
+      generateBtn.textContent = "Generating…";
+      try {
+        const resp = await fetch("/api/generate-fud-meme", {
+          method: "POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({ headline, isRealHeadline: isReal })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          outputEl.textContent = data.memeText;
+        } else {
+          outputEl.textContent = "Error: " + (data.error||resp.statusText);
+        }
+      } catch (e) {
+        outputEl.textContent = "Network error.";
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = "Generate Meme Text";
+      }
+    };
+  </script>
+</body>
+</html>
